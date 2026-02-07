@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/types/database'
@@ -24,10 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [session, setSession] = useState<Session | null>(null)
     const [isLoading, setIsLoading] = useState(true)
 
-    const supabase = createClient()
+    const supabase = useMemo(() => createClient(), [])
 
     // Fetch user profile from profiles table
-    const fetchProfile = async (userId: string) => {
+    const fetchProfile = useCallback(async (userId: string) => {
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -39,15 +39,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return null
         }
         return data as Profile
-    }
+    }, [supabase])
 
     // Refresh profile data
-    const refreshProfile = async () => {
+    const refreshProfile = useCallback(async () => {
         if (user) {
             const profileData = await fetchProfile(user.id)
             setProfile(profileData)
         }
-    }
+    }, [user, fetchProfile])
 
     useEffect(() => {
         let mounted = true
@@ -107,8 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             mounted = false
             subscription.unsubscribe()
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [supabase, fetchProfile])
 
     // Sign up with email and password
     const signUp = async (email: string, password: string, fullName: string) => {

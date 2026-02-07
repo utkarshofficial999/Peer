@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Menu, X, Search, Plus, User, Bell, MessageSquare, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -12,7 +12,7 @@ export default function Header() {
     const [unreadCount, setUnreadCount] = useState(0)
     const router = useRouter()
     const { user, profile, isLoading, signOut } = useAuth()
-    const supabase = createClient()
+    const supabase = useMemo(() => createClient(), [])
 
     // Fetch and subscribe to unread messages count
     useEffect(() => {
@@ -87,8 +87,7 @@ export default function Header() {
                 supabase.removeChannel(channel)
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user])
+    }, [user, supabase])
 
     const handleSignOut = async () => {
         await signOut()
