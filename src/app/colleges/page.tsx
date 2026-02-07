@@ -35,7 +35,7 @@ export default function CollegesPage() {
                             For <span className="gradient-text">Colleges</span>
                         </h1>
                         <p className="text-xl text-dark-300 max-w-2xl mx-auto leading-relaxed">
-                            Support your students and promote sustainability by officializing PeeRly as your campus's trusted trade partner.
+                            Support your students and promote sustainability by officializing PeeRly as your campus&apos;s trusted trade partner.
                         </p>
                     </div>
 
@@ -82,7 +82,7 @@ export default function CollegesPage() {
                             {/* Contact Box */}
                             <div className="p-8 rounded-2xl bg-white/5 border border-white/10 text-center">
                                 <h3 className="text-xl font-bold text-white mb-2">Interested in partnering?</h3>
-                                <p className="text-dark-400 mb-6">Let's talk about how we can help your students.</p>
+                                <p className="text-dark-400 mb-6">Let&apos;s talk about how we can help your students.</p>
                                 <a
                                     href="mailto:colleges@peerly.in"
                                     className="inline-flex items-center gap-2 text-primary-400 hover:text-primary-300 font-bold text-lg transition-colors underline underline-offset-8 decoration-primary-500/30"

@@ -1,15 +1,94 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Menu, X, Search, Plus, User, Bell, MessageSquare, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { createClient } from '@/lib/supabase/client'
 
 export default function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const [unreadCount, setUnreadCount] = useState(0)
     const router = useRouter()
     const { user, profile, isLoading, signOut } = useAuth()
+    const supabase = createClient()
+
+    // Fetch and subscribe to unread messages count
+    useEffect(() => {
+        if (!user) {
+            setUnreadCount(0)
+            return
+        }
+
+        let isMounted = true
+        let channel: ReturnType<typeof supabase.channel> | null = null
+
+        const fetchUnreadCount = async () => {
+            try {
+                // Get all conversations where user is participant
+                const { data: conversations, error: convError } = await supabase
+                    .from('conversations')
+                    .select('id')
+                    .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+
+                if (convError || !isMounted) return
+
+                if (!conversations || conversations.length === 0) {
+                    if (isMounted) setUnreadCount(0)
+                    return
+                }
+
+                const convIds = conversations.map((c: { id: string }) => c.id)
+
+                // Count unread messages not sent by current user
+                const { count, error: msgError } = await supabase
+                    .from('messages')
+                    .select('*', { count: 'exact', head: true })
+                    .in('conversation_id', convIds)
+                    .neq('sender_id', user.id)
+                    .eq('is_read', false)
+
+                if (msgError || !isMounted) return
+
+                setUnreadCount(count || 0)
+            } catch (err: any) {
+                // Ignore abort errors - these happen during normal cleanup
+                if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+                    return
+                }
+                console.error('Error fetching unread count:', err)
+            }
+        }
+
+        // Small delay to prevent race conditions with auth
+        const timeoutId = setTimeout(() => {
+            if (isMounted) {
+                fetchUnreadCount()
+
+                // Subscribe to new messages for real-time updates
+                channel = supabase
+                    .channel(`unread-messages-${user.id}`)
+                    .on('postgres_changes', {
+                        event: '*',
+                        schema: 'public',
+                        table: 'messages'
+                    }, () => {
+                        if (isMounted) fetchUnreadCount()
+                    })
+                    .subscribe()
+            }
+        }, 500)
+
+        return () => {
+            isMounted = false
+            clearTimeout(timeoutId)
+            if (channel) {
+                supabase.removeChannel(channel)
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user])
 
     const handleSignOut = async () => {
         await signOut()
@@ -75,6 +154,11 @@ export default function Header() {
                                     {/* Messages */}
                                     <Link href="/messages" className="p-2.5 text-dark-300 hover:text-white rounded-xl hover:bg-white/5 transition-all relative">
                                         <MessageSquare className="w-5 h-5" />
+                                        {unreadCount > 0 && (
+                                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-lg shadow-rose-500/30 animate-pulse">
+                                                {unreadCount > 9 ? '9+' : unreadCount}
+                                            </span>
+                                        )}
                                     </Link>
                                     {/* Sell Button */}
                                     <Link href="/create" className="btn-primary py-2.5 px-4">
@@ -149,6 +233,15 @@ export default function Header() {
                                         <Link href="/create" className="btn-primary justify-center">
                                             <Plus className="w-4 h-4" />
                                             Sell Something
+                                        </Link>
+                                        <Link href="/messages" className="btn-secondary justify-center relative">
+                                            <MessageSquare className="w-4 h-4" />
+                                            Messages
+                                            {unreadCount > 0 && (
+                                                <span className="ml-2 min-w-[20px] h-[20px] bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                                </span>
+                                            )}
                                         </Link>
                                         <Link href="/dashboard" className="btn-secondary justify-center">
                                             <User className="w-4 h-4" />

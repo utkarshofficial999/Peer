@@ -15,7 +15,7 @@ export default function SafetyPage() {
         },
         {
             title: 'Inspect Before You Pay',
-            desc: 'Don\'t pay any money upfront. Meet the seller, inspect the condition of the item thoroughly, and only pay when you\'re satisfied.',
+            desc: "Don't pay any money upfront. Meet the seller, inspect the condition of the item thoroughly, and only pay when you're satisfied.",
             icon: Eye,
             color: 'text-primary-400',
             bgColor: 'bg-primary-500/10'
@@ -48,7 +48,7 @@ export default function SafetyPage() {
                             Campus <span className="gradient-text">Safety</span> First
                         </h1>
                         <p className="text-xl text-dark-300">
-                            "Your safety comes first. Protect yourself with these campus-verified tips."
+                            Your safety comes first. Protect yourself with these campus-verified tips.
                         </p>
                     </div>
 
@@ -61,7 +61,7 @@ export default function SafetyPage() {
                                 </div>
                                 <h3 className="text-2xl font-bold text-white mb-4">{tip.title}</h3>
                                 <p className="text-dark-300 leading-relaxed text-lg italic">
-                                    "{tip.desc}"
+                                    {tip.desc}
                                 </p>
                             </div>
                         ))}
@@ -79,7 +79,7 @@ export default function SafetyPage() {
                                 {[
                                     'Meet during daylight hours.',
                                     'Tell a friend or roommate where you are going.',
-                                    'Verify the user\'s student status on their profile.',
+                                    "Verify the user's student status on their profile.",
                                     'Use digital payments (like UPI) only after inspection.',
                                     'Report any suspicious behavior immediately.'
                                 ].map((item, i) => (

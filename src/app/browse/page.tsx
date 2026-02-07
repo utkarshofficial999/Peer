@@ -50,11 +50,16 @@ function BrowseContent() {
     const [categories, setCategories] = useState<any[]>([])
     const [colleges, setColleges] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [searchQuery, setSearchQuery] = useState('')
+    const [searchInput, setSearchInput] = useState('') // User's input
+    const [searchQuery, setSearchQuery] = useState('') // Debounced search
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [sortBy, setSortBy] = useState('newest')
+    const [hasMore, setHasMore] = useState(true)
+    const [offset, setOffset] = useState(0)
+    const ITEMS_PER_PAGE = 20
 
     const [filters, setFilters] = useState({
         category: categoryFromUrl,
@@ -64,6 +69,15 @@ function BrowseContent() {
         college: '',
     })
 
+    // Debounce search input to avoid too many queries
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            setSearchQuery(searchInput)
+        }, 500) // Wait 500ms after user stops typing
+
+        return () => clearTimeout(timeoutId)
+    }, [searchInput])
+
     // Update filter if URL param changes
     useEffect(() => {
         if (categoryFromUrl) {
@@ -71,27 +85,50 @@ function BrowseContent() {
         }
     }, [categoryFromUrl])
 
-    // Fetch initial metadata
+    // Fetch initial metadata ONCE and cache
     useEffect(() => {
         const fetchMeta = async () => {
+            // Check if we already have cached data in sessionStorage
+            const cachedCategories = sessionStorage.getItem('categories')
+            const cachedColleges = sessionStorage.getItem('colleges')
+
+            if (cachedCategories && cachedColleges) {
+                setCategories(JSON.parse(cachedCategories))
+                setColleges(JSON.parse(cachedColleges))
+                return
+            }
+
             try {
                 const [catRes, colRes] = await Promise.all([
                     supabase.from('categories').select('*'),
                     supabase.from('colleges').select('*')
                 ])
-                if (catRes.data) setCategories(catRes.data)
-                if (colRes.data) setColleges(colRes.data)
+                if (catRes.data) {
+                    setCategories(catRes.data)
+                    sessionStorage.setItem('categories', JSON.stringify(catRes.data))
+                }
+                if (colRes.data) {
+                    setColleges(colRes.data)
+                    sessionStorage.setItem('colleges', JSON.stringify(colRes.data))
+                }
             } catch (err) {
                 console.error('Error fetching metadata:', err)
             }
         }
         fetchMeta()
-    }, [])
+    }, [supabase])
 
-    // Fetch listings
-    const fetchListings = useCallback(async () => {
-        setIsLoading(true)
+    // Fetch listings with pagination
+    const fetchListings = useCallback(async (loadMore = false) => {
+        if (loadMore) {
+            setIsLoadingMore(true)
+        } else {
+            setIsLoading(true)
+            setOffset(0)
+        }
         setError(null)
+
+        const currentOffset = loadMore ? offset : 0
 
         try {
             let query = supabase
@@ -100,7 +137,7 @@ function BrowseContent() {
                     *,
                     seller:profiles!listings_seller_id_fkey(full_name, avatar_url),
                     college:colleges(name)
-                `)
+                `, { count: 'exact' })
                 .eq('is_active', true)
                 .eq('is_sold', false)
 
@@ -140,10 +177,23 @@ function BrowseContent() {
                 default: query = query.order('created_at', { ascending: false })
             }
 
-            const { data, error: fetchError } = await query
+            // Add pagination
+            query = query.range(currentOffset, currentOffset + ITEMS_PER_PAGE - 1)
+
+            const { data, error: fetchError, count } = await query
 
             if (fetchError) throw fetchError
-            setListings(data || [])
+
+            if (loadMore) {
+                setListings(prev => [...prev, ...(data || [])])
+                setOffset(currentOffset + ITEMS_PER_PAGE)
+            } else {
+                setListings(data || [])
+                setOffset(ITEMS_PER_PAGE)
+            }
+
+            // Check if there are more items
+            setHasMore(count ? count > (loadMore ? offset + ITEMS_PER_PAGE : ITEMS_PER_PAGE) : false)
         } catch (err: any) {
             // Ignore abort errors
             if (err.name === 'AbortError' || err.message?.includes('aborted')) return
@@ -152,12 +202,15 @@ function BrowseContent() {
             setError(err.message)
         } finally {
             setIsLoading(false)
+            setIsLoadingMore(false)
         }
-    }, [filters, searchQuery, sortBy, categories, colleges])
+    }, [filters, searchQuery, sortBy, categories, colleges, offset, supabase])
 
     useEffect(() => {
-        fetchListings()
-    }, [fetchListings])
+        if (categories.length > 0 && colleges.length > 0) {
+            fetchListings(false)
+        }
+    }, [filters, searchQuery, sortBy, categories, colleges, fetchListings])
 
     const handleFilterChange = (key: string, value: string) => {
         setFilters(prev => ({ ...prev, [key]: value }))
@@ -171,6 +224,7 @@ function BrowseContent() {
             priceMax: '',
             college: '',
         })
+        setSearchInput('')
         setSearchQuery('')
     }
 
@@ -190,11 +244,10 @@ function BrowseContent() {
                         </p>
                     </div>
 
-                    {/* Search Bar */}
                     <div className="mb-6">
                         <SearchBar
-                            value={searchQuery}
-                            onChange={setSearchQuery}
+                            value={searchInput}
+                            onChange={setSearchInput}
                             onFilterClick={() => setIsFilterOpen(true)}
                         />
                     </div>
@@ -269,7 +322,7 @@ function BrowseContent() {
                             ) : error ? (
                                 <div className="glass-card p-12 text-center text-red-400">
                                     <p>Error: {error}</p>
-                                    <button onClick={fetchListings} className="mt-4 btn-secondary">Retry</button>
+                                    <button onClick={() => fetchListings(false)} className="mt-4 btn-secondary">Retry</button>
                                 </div>
                             ) : listings.length > 0 ? (
                                 <div className={`grid gap-4 ${viewMode === 'grid'
@@ -307,10 +360,21 @@ function BrowseContent() {
                             )}
 
                             {/* Load More */}
-                            {!isLoading && listings.length >= 20 && (
+                            {!isLoading && hasMore && listings.length > 0 && (
                                 <div className="mt-8 text-center">
-                                    <button className="btn-secondary">
-                                        Load More Listings
+                                    <button
+                                        onClick={() => fetchListings(true)}
+                                        disabled={isLoadingMore}
+                                        className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isLoadingMore ? (
+                                            <span className="flex items-center gap-2">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Loading...
+                                            </span>
+                                        ) : (
+                                            'Load More Listings'
+                                        )}
                                     </button>
                                 </div>
                             )}

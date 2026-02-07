@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import Header from '@/components/layout/Header'
 
-export default function LoginPage() {
+function LoginContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { signIn } = useAuth()
@@ -169,7 +169,7 @@ export default function LoginPage() {
 
                         {/* Sign Up Link */}
                         <p className="text-center text-dark-400">
-                            Don't have an account?{' '}
+                            Don&apos;t have an account?{' '}
                             <Link href="/signup" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
                                 Sign up free
                             </Link>
@@ -178,5 +178,17 @@ export default function LoginPage() {
                 </div>
             </main>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+                <div className="w-12 h-12 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     )
 }

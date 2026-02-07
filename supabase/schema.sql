@@ -232,13 +232,21 @@ CREATE POLICY "Authenticated users can create reviews" ON reviews
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  college_id_found UUID;
 BEGIN
-  INSERT INTO profiles (id, email, full_name, avatar_url)
+  -- Try to match college by email domain (e.g., abes.ac.in)
+  SELECT id INTO college_id_found FROM colleges 
+  WHERE email_domain = split_part(NEW.email, '@', 2)
+  LIMIT 1;
+
+  INSERT INTO profiles (id, email, full_name, avatar_url, college_id)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    NEW.raw_user_meta_data->>'avatar_url'
+    NEW.raw_user_meta_data->>'avatar_url',
+    college_id_found
   );
   RETURN NEW;
 END;
@@ -296,12 +304,35 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_profiles_college ON profiles(college_id);
 
 -- =============================================
--- STORAGE BUCKETS
+-- STORAGE BUCKETS & POLICIES
 -- =============================================
--- Run these in Supabase Dashboard > Storage
 
--- Create bucket for listing images
--- INSERT INTO storage.buckets (id, name, public) VALUES ('listings', 'listings', TRUE);
+-- 1. Create the bucket (Run this in SQL editor)
+-- Note: If bucket already exists, this might error, you can skip to policies
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('listings', 'listings', TRUE)
+ON CONFLICT (id) DO NOTHING;
 
--- Create bucket for avatars
--- INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', TRUE);
+-- 2. Enable RLS on storage.objects
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- 3. Policy: Allow anyone to view listing images
+CREATE POLICY "Listing images are publicly accessible"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'listings');
+
+-- 4. Policy: Allow authenticated users to upload images
+CREATE POLICY "Users can upload listing images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'listings' 
+    AND auth.role() = 'authenticated'
+  );
+
+-- 5. Policy: Allow owners to delete their images
+CREATE POLICY "Users can delete own listing images"
+  ON storage.objects FOR DELETE
+  USING (
+    bucket_id = 'listings' 
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );

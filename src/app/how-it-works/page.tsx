@@ -34,7 +34,7 @@ export default function HowItWorks() {
         {
             number: '04',
             title: 'Meet & Exchange',
-            description: 'Meet at a safe, public spot on campus. Inspect the item, handle the payment, and complete your trade. It\'s that easy!',
+            description: 'Meet at a safe, public spot on campus. Inspect the item, handle the payment, and complete your trade. It&apos;s that easy!',
             icon: MapPin,
             color: 'text-accent-400',
             bgColor: 'bg-accent-500/10'

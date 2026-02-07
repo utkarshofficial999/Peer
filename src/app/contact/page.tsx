@@ -17,7 +17,7 @@ export default function ContactPage() {
                             Contact <span className="gradient-text">Us</span>
                         </h1>
                         <p className="text-xl text-dark-300">
-                            We'd love to hear from you! Whether it's a question, feedback, or just a hello.
+                            We&apos;d love to hear from you! Whether it&apos;s a question, feedback, or just a hello.
                         </p>
                     </div>
 

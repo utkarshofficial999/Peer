@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import { Heart, ShoppingBag, ArrowRight, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 
@@ -14,13 +15,7 @@ export default function SavedItemsPage() {
     const [isLoading, setIsLoading] = useState(true)
     const supabase = createClient()
 
-    useEffect(() => {
-        if (user) {
-            fetchSavedItems()
-        }
-    }, [user])
-
-    const fetchSavedItems = async () => {
+    const fetchSavedItems = useCallback(async () => {
         setIsLoading(true)
         // Fetch saved_listings joined with listings
         const { data, error } = await supabase
@@ -35,7 +30,13 @@ export default function SavedItemsPage() {
             setSavedItems(data.map((item: any) => item.listings))
         }
         setIsLoading(false)
-    }
+    }, [user, supabase])
+
+    useEffect(() => {
+        if (user) {
+            fetchSavedItems()
+        }
+    }, [user, fetchSavedItems])
 
     const removeSaved = async (id: string) => {
         // Logic to remove from DB would go here
@@ -50,7 +51,7 @@ export default function SavedItemsPage() {
                 <div className="max-w-6xl mx-auto">
                     <div className="mb-10">
                         <h1 className="text-3xl font-display font-bold text-white mb-2">Saved Items</h1>
-                        <p className="text-dark-400">Keep track of the things you're interested in.</p>
+                        <p className="text-dark-400">Keep track of the things you&apos;re interested in.</p>
                     </div>
 
                     {isLoading ? (
@@ -65,7 +66,12 @@ export default function SavedItemsPage() {
                                 <div key={item.id} className="glass-card overflow-hidden group h-full flex flex-col">
                                     <div className="aspect-[4/5] bg-dark-800 relative overflow-hidden">
                                         {item.images?.[0] && (
-                                            <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                            <Image
+                                                src={item.images[0]}
+                                                alt={item.title}
+                                                fill
+                                                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                            />
                                         )}
                                         <button
                                             onClick={() => removeSaved(item.id)}
@@ -93,7 +99,7 @@ export default function SavedItemsPage() {
                             </div>
                             <h2 className="text-2xl font-bold text-white mb-2">No saved items</h2>
                             <p className="text-dark-400 mb-8 max-w-sm mx-auto italic">
-                                "Found something interesting? Save listings and come back later without searching again."
+                                &quot;Found something interesting? Save listings and come back later without searching again.&quot;
                             </p>
                             <Link href="/browse" className="btn-secondary px-8 py-3 mx-auto flex items-center gap-2">
                                 <ShoppingBag className="w-5 h-5" />

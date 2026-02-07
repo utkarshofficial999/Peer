@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { Search, Send, MapPin, ShieldAlert, MoreVertical, Phone, Loader2, ArrowLeft } from 'lucide-react'
@@ -17,6 +17,7 @@ interface Conversation {
     seller_id: string
     last_message?: string
     updated_at: string
+    unread_count: number
     other_party: {
         id: string
         full_name: string
@@ -37,7 +38,7 @@ interface Message {
     is_read: boolean
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
     const supabase = createClient()
     const { user } = useAuth()
     const searchParams = useSearchParams()
@@ -52,44 +53,11 @@ export default function MessagesPage() {
     const [isSending, setIsSending] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
-    const scrollToBottom = () => {
+    const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    }, [])
 
-    useEffect(() => {
-        if (user) {
-            fetchConversations()
-        }
-    }, [user])
-
-    useEffect(() => {
-        if (selectedConvId) {
-            fetchMessages(selectedConvId)
-
-            // Subscribe to new messages for this conversation
-            const channel = supabase
-                .channel(`conv:${selectedConvId}`)
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `conversation_id=eq.${selectedConvId}`
-                }, (payload: { new: Message }) => {
-                    const newMsg = payload.new
-                    setMessages(prev => [...prev.filter(m => m.id !== newMsg.id), newMsg])
-                    fetchConversations() // Refresh sidebar for last message
-                })
-                .subscribe()
-
-            return () => {
-                supabase.removeChannel(channel)
-            }
-        }
-    }, [selectedConvId])
-
-    useEffect(scrollToBottom, [messages])
-
-    const fetchConversations = async () => {
+    const fetchConversations = useCallback(async () => {
         if (!user) return
         setIsLoadingConvs(true)
         try {
@@ -103,26 +71,50 @@ export default function MessagesPage() {
                 `)
                 .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
                 .order('updated_at', { ascending: false })
+                .limit(50)
 
             if (error) throw error
+
+            // Fetch unread counts for all conversations
+            const convIds = data.map((c: { id: string }) => c.id)
+
+            let unreadCounts: Record<string, number> = {}
+            if (convIds.length > 0) {
+                const { data: unreadData } = await supabase
+                    .from('messages')
+                    .select('conversation_id')
+                    .in('conversation_id', convIds)
+                    .neq('sender_id', user.id)
+                    .eq('is_read', false)
+
+                // Count unread messages per conversation
+                unreadData?.forEach((msg: { conversation_id: string }) => {
+                    unreadCounts[msg.conversation_id] = (unreadCounts[msg.conversation_id] || 0) + 1
+                })
+            }
+
+
 
             const formatted = data.map((conv: any) => {
                 const otherParty = conv.buyer_id === user.id ? conv.seller : conv.buyer
                 return {
                     ...conv,
-                    other_party: otherParty
+                    other_party: otherParty,
+                    unread_count: unreadCounts[conv.id] || 0
                 }
             })
 
             setConversations(formatted)
-        } catch (err) {
+        } catch (err: any) {
+            // Ignore abort errors during cleanup
+            if (err?.name === 'AbortError' || err?.message?.includes('aborted')) return
             console.error('Error fetching conversations:', err)
         } finally {
             setIsLoadingConvs(false)
         }
-    }
+    }, [user, supabase])
 
-    const fetchMessages = async (convId: string) => {
+    const fetchMessages = useCallback(async (convId: string) => {
         setIsLoadingMsgs(true)
         try {
             const { data, error } = await supabase
@@ -130,15 +122,86 @@ export default function MessagesPage() {
                 .select('*')
                 .eq('conversation_id', convId)
                 .order('created_at', { ascending: true })
+                .limit(100) // Only fetch last 100 messages for performance
 
             if (error) throw error
             setMessages(data || [])
+
+            // Mark messages from the other party as read
+            if (user && data && data.length > 0) {
+                const unreadMessageIds = data
+                    .filter((msg: Message) => msg.sender_id !== user.id && !msg.is_read)
+                    .map((msg: Message) => msg.id)
+
+                if (unreadMessageIds.length > 0) {
+                    await supabase
+                        .from('messages')
+                        .update({ is_read: true })
+                        .in('id', unreadMessageIds)
+                }
+            }
         } catch (err) {
             console.error('Error fetching messages:', err)
         } finally {
             setIsLoadingMsgs(false)
         }
-    }
+    }, [user, supabase])
+
+    useEffect(() => {
+        let isMounted = true
+        if (user) {
+            // Small delay to prevent race conditions
+            const timeoutId = setTimeout(() => {
+                if (isMounted) fetchConversations()
+            }, 100)
+            return () => {
+                isMounted = false
+                clearTimeout(timeoutId)
+            }
+        }
+    }, [user, fetchConversations])
+
+    useEffect(() => {
+        let isMounted = true
+        let channel: ReturnType<typeof supabase.channel> | null = null
+
+        if (selectedConvId) {
+            fetchMessages(selectedConvId)
+
+            // Subscribe to new messages for this conversation
+            channel = supabase
+                .channel(`conv:${selectedConvId}`)
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `conversation_id=eq.${selectedConvId}`
+                }, (payload: { new: Message }) => {
+                    if (!isMounted) return
+                    const newMsg = payload.new
+                    setMessages(prev => [...prev.filter(m => m.id !== newMsg.id), newMsg])
+
+                    // Update conversation timestamp locally instead of refetching everything
+                    setConversations(prev => prev.map(c =>
+                        c.id === selectedConvId
+                            ? { ...c, updated_at: new Date().toISOString() }
+                            : c
+                    ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()))
+                })
+                .subscribe()
+        }
+
+        return () => {
+            isMounted = false
+            if (channel) {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [selectedConvId, supabase, fetchMessages])
+
+    useEffect(() => {
+        scrollToBottom()
+    }, [messages, scrollToBottom])
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -202,23 +265,28 @@ export default function MessagesPage() {
                                     <button
                                         key={chat.id}
                                         onClick={() => setSelectedConvId(chat.id)}
-                                        className={`w-full p-4 flex gap-3 items-center hover:bg-white/5 transition-colors border-b border-white/5 ${selectedConvId === chat.id ? 'bg-white/5' : ''}`}
+                                        className={`w-full p-4 flex gap-3 items-center hover:bg-white/5 transition-colors border-b border-white/5 ${selectedConvId === chat.id ? 'bg-white/5' : ''} ${chat.unread_count > 0 ? 'bg-primary-500/5' : ''}`}
                                     >
                                         <div className="relative shrink-0">
                                             {chat.other_party.avatar_url ? (
-                                                <Image src={chat.other_party.avatar_url} alt="" width={48} height={48} className="rounded-2xl" />
+                                                <Image src={chat.other_party.avatar_url} alt={chat.other_party.full_name} width={48} height={48} className="rounded-2xl" />
                                             ) : (
                                                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold shrink-0">
                                                     {chat.other_party.full_name[0].toUpperCase()}
                                                 </div>
                                             )}
+                                            {chat.unread_count > 0 && (
+                                                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-lg">
+                                                    {chat.unread_count > 9 ? '9+' : chat.unread_count}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex-1 min-w-0 text-left">
                                             <div className="flex justify-between items-start mb-0.5">
-                                                <span className="text-white font-bold truncate">{chat.other_party.full_name}</span>
+                                                <span className={`font-bold truncate ${chat.unread_count > 0 ? 'text-white' : 'text-white'}`}>{chat.other_party.full_name}</span>
                                                 <span className="text-[10px] text-dark-500 uppercase font-bold shrink-0">{formatRelativeTime(chat.updated_at)}</span>
                                             </div>
-                                            <p className="text-xs text-dark-400 truncate">{chat.listing?.title || 'Chat'}</p>
+                                            <p className={`text-xs truncate ${chat.unread_count > 0 ? 'text-primary-400 font-medium' : 'text-dark-400'}`}>{chat.listing?.title || 'Chat'}</p>
                                         </div>
                                     </button>
                                 ))
@@ -240,7 +308,7 @@ export default function MessagesPage() {
                                         </button>
                                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold">
                                             {currentConv.other_party.avatar_url ? (
-                                                <Image src={currentConv.other_party.avatar_url} alt="" width={40} height={40} className="rounded-xl" />
+                                                <Image src={currentConv.other_party.avatar_url} alt={currentConv.other_party.full_name} width={40} height={40} className="rounded-xl" />
                                             ) : (
                                                 currentConv.other_party.full_name[0].toUpperCase()
                                             )}
@@ -319,5 +387,17 @@ export default function MessagesPage() {
                 </div>
             </main>
         </div>
+    )
+}
+
+export default function MessagesPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
+            </div>
+        }>
+            <MessagesContent />
+        </Suspense>
     )
 }

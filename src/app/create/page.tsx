@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Upload, X, Camera, Plus, ArrowRight, ArrowLeft, Check, AlertCircle } from 'lucide-react'
 import Header from '@/components/layout/Header'
 import { useAuth } from '@/context/AuthContext'
@@ -49,16 +50,26 @@ export default function CreateListingPage() {
 
     // Fetch categories from DB
     useEffect(() => {
+        let isMounted = true
         const fetchCategories = async () => {
             try {
                 const { data, error } = await supabase.from('categories').select('*')
-                if (data) setDbCategories(data)
+                if (error) {
+                    console.error('Supabase categories error:', error)
+                    return
+                }
+                if (isMounted && data) {
+                    console.log('Fetched categories:', data.length)
+                    setDbCategories(data)
+                }
             } catch (err) {
                 console.error('Error fetching categories:', err)
             }
         }
         fetchCategories()
-    }, [supabase])
+        return () => { isMounted = false }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || [])
@@ -90,17 +101,22 @@ export default function CreateListingPage() {
 
         setIsLoading(true)
         setError(null)
+        console.log('Starting listing submission...')
 
         try {
             const uploadedImageUrls: string[] = []
 
             // 1. Upload Images
-            for (const file of images) {
+            console.log(`Uploading ${images.length} images...`)
+            for (let i = 0; i < images.length; i++) {
+                const file = images[i]
                 const fileExt = file.name.split('.').pop()
-                const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+                const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`
                 const filePath = `${user.id}/${fileName}`
 
-                const { error: uploadError } = await supabase.storage
+                console.log(`Uploading image ${i + 1}/${images.length}: ${filePath}`)
+
+                const { data: uploadData, error: uploadError } = await supabase.storage
                     .from('listings')
                     .upload(filePath, file, {
                         cacheControl: '3600',
@@ -108,8 +124,8 @@ export default function CreateListingPage() {
                     })
 
                 if (uploadError) {
-                    console.error('Upload error:', uploadError)
-                    throw new Error(`Failed to upload image: ${uploadError.message}`)
+                    console.error('Image upload failed:', uploadError)
+                    throw new Error(`Failed to upload images. Please check if the "listings" storage bucket is created in Supabase. (Error: ${uploadError.message})`)
                 }
 
                 // Get Public URL
@@ -118,42 +134,64 @@ export default function CreateListingPage() {
                     .getPublicUrl(filePath)
 
                 uploadedImageUrls.push(publicUrl)
+                console.log('Image uploaded successfully:', publicUrl)
             }
 
             // 2. Map category slug to ID
-            const selectedCat = dbCategories.find(c => c.slug === formData.category)
-            if (!selectedCat) throw new Error('Invalid category selected')
+            // Fallback: If DB categories are empty, try to match by hardcoded IDs or name
+            let selectedCat = dbCategories.find((c: any) => c.slug === formData.category)
+
+            if (!selectedCat) {
+                console.warn('Category not found in DB categories, checking fallback...')
+                // Attempt to fetch again or use a default if critical
+                const { data: freshCats } = await supabase.from('categories').select('*')
+                selectedCat = freshCats?.find((c: any) => c.slug === formData.category)
+            }
+
+            if (!selectedCat) {
+                throw new Error(`Category "${formData.category}" not found in database. Please ensure you have run the schema.sql script.`)
+            }
 
             // 3. Insert Listing
+            console.log('Inserting listing record into database...')
+            const listingData = {
+                seller_id: user.id,
+                title: formData.title,
+                description: formData.description,
+                price: parseFloat(formData.price) || 0,
+                category_id: selectedCat.id,
+                condition: formData.condition,
+                images: uploadedImageUrls,
+                college_id: profile.college_id,
+                location: formData.location,
+                is_active: true
+            }
+
+            console.log('Listing details:', listingData)
+
             const { data: listing, error: insertError } = await supabase
                 .from('listings')
-                .insert({
-                    seller_id: user.id,
-                    title: formData.title,
-                    description: formData.description,
-                    price: parseFloat(formData.price),
-                    category_id: selectedCat.id,
-                    condition: formData.condition,
-                    images: uploadedImageUrls,
-                    college_id: profile.college_id,
-                    location: formData.location,
-                    is_active: true
-                })
+                .insert(listingData)
                 .select()
                 .single()
 
             if (insertError) {
-                console.error('Insert error:', insertError)
+                console.error('Database insertion failed:', insertError)
                 throw new Error(`Failed to save listing: ${insertError.message}`)
             }
 
+            console.log('Listing created successfully!', listing)
             router.push('/dashboard?created=true')
         } catch (err: any) {
-            // Ignore abort errors which are common in dev HMR
-            if (err.name === 'AbortError' || err.message?.includes('aborted')) return
+            console.error('Full submission error details:', err)
 
-            console.error('Submission error:', err)
-            setError(err.message || 'Something went wrong. Please try again.')
+            // Ignore abort errors which are common in dev HMR
+            if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+                console.log('Submission aborted (likely HMR)')
+                return
+            }
+
+            setError(err.message || 'Something went wrong. Please check your internet connection and try again.')
         } finally {
             setIsLoading(false)
         }
@@ -347,7 +385,7 @@ export default function CreateListingPage() {
                                     {/* Image Previews */}
                                     {imagePreviews.map((preview, index) => (
                                         <div key={index} className="relative aspect-square rounded-xl overflow-hidden bg-dark-800">
-                                            <img src={preview} alt="" className="w-full h-full object-cover" />
+                                            <Image src={preview} alt="Preview" fill className="object-cover" />
                                             <button
                                                 onClick={() => removeImage(index)}
                                                 className="absolute top-2 right-2 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-red-500 transition-colors"
@@ -400,7 +438,9 @@ export default function CreateListingPage() {
                                 {/* Preview Card */}
                                 <div className="bg-dark-800/50 rounded-xl overflow-hidden">
                                     {imagePreviews[0] && (
-                                        <img src={imagePreviews[0]} alt="" className="w-full aspect-video object-cover" />
+                                        <div className="w-full aspect-video relative">
+                                            <Image src={imagePreviews[0]} alt="Preview" fill className="object-cover" />
+                                        </div>
                                     )}
                                     <div className="p-6">
                                         <div className="badge-primary mb-3">

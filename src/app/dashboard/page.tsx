@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import Header from '@/components/layout/Header'
 import { Plus, Package, Heart, MessageSquare, Settings, ChevronRight, TrendingUp, Eye, DollarSign } from 'lucide-react'
@@ -25,13 +26,7 @@ export default function DashboardPage() {
     const [recentListings, setRecentListings] = useState<any[]>([])
     const supabase = createClient()
 
-    useEffect(() => {
-        if (user) {
-            fetchDashboardData()
-        }
-    }, [user])
-
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         if (!user) return
 
         // Fetch user's listings
@@ -44,10 +39,10 @@ export default function DashboardPage() {
 
         if (listings) {
             setRecentListings(listings)
-            const totalViews = listings.reduce((sum, l) => sum + (l.views_count || 0), 0)
+            const totalViews = listings.reduce((sum: number, l: any) => sum + (l.views_count || 0), 0)
             setStats(prev => ({
                 ...prev,
-                activeListings: listings.filter(l => l.is_active && !l.is_sold).length,
+                activeListings: listings.filter((l: any) => l.is_active && !l.is_sold).length,
                 totalViews,
             }))
         }
@@ -69,7 +64,7 @@ export default function DashboardPage() {
             .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
 
         if (conversations && conversations.length > 0) {
-            const conversationIds = conversations.map(c => c.id)
+            const conversationIds = conversations.map((c: any) => c.id)
             const { count: messageCount } = await supabase
                 .from('messages')
                 .select('*', { count: 'exact', head: true })
@@ -81,7 +76,13 @@ export default function DashboardPage() {
                 setStats(prev => ({ ...prev, messages: messageCount }))
             }
         }
-    }
+    }, [user, supabase])
+
+    useEffect(() => {
+        if (user) {
+            fetchDashboardData()
+        }
+    }, [user, fetchDashboardData])
 
     if (isLoading) {
         return (
@@ -118,7 +119,7 @@ export default function DashboardPage() {
                             Welcome back, {profile?.full_name?.split(' ')[0] || 'there'}! 👋
                         </h1>
                         <p className="text-dark-400">
-                            Here's what's happening with your listings
+                            Here&apos;s what&apos;s happening with your listings
                         </p>
                     </div>
 
@@ -127,9 +128,9 @@ export default function DashboardPage() {
                         {statsCards.map((stat, index) => (
                             <div key={index} className="glass-card p-5">
                                 <div className={`w-10 h-10 rounded-xl mb-3 flex items-center justify-center ${stat.color === 'primary' ? 'bg-primary-500/20 text-primary-400' :
-                                        stat.color === 'accent' ? 'bg-accent-500/20 text-accent-400' :
-                                            stat.color === 'rose' ? 'bg-rose-500/20 text-rose-400' :
-                                                'bg-blue-500/20 text-blue-400'
+                                    stat.color === 'accent' ? 'bg-accent-500/20 text-accent-400' :
+                                        stat.color === 'rose' ? 'bg-rose-500/20 text-rose-400' :
+                                            'bg-blue-500/20 text-blue-400'
                                     }`}>
                                     <stat.icon className="w-5 h-5" />
                                 </div>
@@ -150,10 +151,10 @@ export default function DashboardPage() {
                                     className="relative flex flex-col items-center gap-2 p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all group"
                                 >
                                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${action.color === 'primary' ? 'bg-primary-500/20 text-primary-400' :
-                                            action.color === 'accent' ? 'bg-accent-500/20 text-accent-400' :
-                                                action.color === 'rose' ? 'bg-rose-500/20 text-rose-400' :
-                                                    action.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
-                                                        'bg-dark-700 text-dark-300'
+                                        action.color === 'accent' ? 'bg-accent-500/20 text-accent-400' :
+                                            action.color === 'rose' ? 'bg-rose-500/20 text-rose-400' :
+                                                action.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
+                                                    'bg-dark-700 text-dark-300'
                                         }`}>
                                         <action.icon className="w-5 h-5" />
                                     </div>
@@ -189,7 +190,12 @@ export default function DashboardPage() {
                                     >
                                         <div className="w-16 h-16 rounded-lg bg-dark-700 overflow-hidden flex-shrink-0">
                                             {listing.images?.[0] && (
-                                                <img src={listing.images[0]} alt={listing.title} className="w-full h-full object-cover" />
+                                                <Image
+                                                    src={listing.images[0]}
+                                                    alt={listing.title}
+                                                    fill
+                                                    className="object-cover"
+                                                />
                                             )}
                                         </div>
                                         <div className="flex-1 min-w-0">
@@ -202,8 +208,8 @@ export default function DashboardPage() {
                                                 {listing.views_count || 0}
                                             </span>
                                             <span className={`px-2 py-1 rounded-full text-xs ${listing.is_sold ? 'bg-emerald-500/20 text-emerald-400' :
-                                                    listing.is_active ? 'bg-primary-500/20 text-primary-400' :
-                                                        'bg-dark-700 text-dark-400'
+                                                listing.is_active ? 'bg-primary-500/20 text-primary-400' :
+                                                    'bg-dark-700 text-dark-400'
                                                 }`}>
                                                 {listing.is_sold ? 'Sold' : listing.is_active ? 'Active' : 'Inactive'}
                                             </span>

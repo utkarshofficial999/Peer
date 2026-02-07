@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
@@ -23,14 +23,7 @@ export default function ListingDetailPage() {
     const [isSaved, setIsSaved] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
-    useEffect(() => {
-        if (id) {
-            fetchListing()
-            checkIfSaved()
-        }
-    }, [id])
-
-    const fetchListing = async () => {
+    const fetchListing = useCallback(async () => {
         setIsLoading(true)
         try {
             const { data, error: fetchError } = await supabase
@@ -54,10 +47,10 @@ export default function ListingDetailPage() {
         } finally {
             setIsLoading(false)
         }
-    }
+    }, [id, supabase])
 
-    const checkIfSaved = async () => {
-        if (!user) return
+    const checkIfSaved = useCallback(async () => {
+        if (!user || !id) return
         const { data } = await supabase
             .from('saved_listings')
             .select('*')
@@ -66,7 +59,14 @@ export default function ListingDetailPage() {
             .single()
 
         if (data) setIsSaved(true)
-    }
+    }, [user, id, supabase])
+
+    useEffect(() => {
+        if (id) {
+            fetchListing()
+            checkIfSaved()
+        }
+    }, [id, fetchListing, checkIfSaved])
 
     const toggleSave = async () => {
         if (!user) {
@@ -130,8 +130,9 @@ export default function ListingDetailPage() {
         </div>
     )
 
-    const conditionInfo = CONDITIONS[listing.condition as keyof typeof CONDITIONS]
-    const sellerInitials = listing.seller.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    const conditionInfo = CONDITIONS[listing.condition as keyof typeof CONDITIONS] || CONDITIONS.good
+    const sellerFullName = listing.seller?.full_name || 'Anonymous'
+    const sellerInitials = sellerFullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
 
     return (
         <div className="min-h-screen bg-dark-950">
@@ -184,7 +185,7 @@ export default function ListingDetailPage() {
                                         onClick={() => setActiveImage(idx)}
                                         className={`relative w-24 h-24 rounded-2xl overflow-hidden shrink-0 transition-all ${activeImage === idx ? 'ring-2 ring-primary-500 scale-95' : 'opacity-60 hover:opacity-100'}`}
                                     >
-                                        <Image src={img} alt="" fill className="object-cover" />
+                                        <Image src={img} alt={`Thumbnail ${idx + 1}`} fill className="object-cover" />
                                     </button>
                                 ))}
                             </div>
@@ -251,7 +252,7 @@ export default function ListingDetailPage() {
                                     </div>
                                     <div className="space-y-1">
                                         <span className="text-xs text-dark-500 uppercase font-bold tracking-wider">Campus</span>
-                                        <p className="text-white truncate">{listing.college.name}</p>
+                                        <p className="text-white truncate">{listing.college?.name || 'Campus Member'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -261,22 +262,22 @@ export default function ListingDetailPage() {
                                 <div className="flex items-center justify-between mb-6">
                                     <div className="flex items-center gap-4">
                                         <div className="relative">
-                                            {listing.seller.avatar_url ? (
-                                                <Image src={listing.seller.avatar_url} alt={listing.seller.full_name} width={56} height={56} className="rounded-2xl" />
+                                            {listing.seller?.avatar_url ? (
+                                                <Image src={listing.seller.avatar_url} alt={listing.seller.full_name || 'Seller'} width={56} height={56} className="rounded-2xl" />
                                             ) : (
                                                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-xl font-bold text-white shadow-lg overflow-hidden capitalize">
                                                     {sellerInitials}
                                                 </div>
                                             )}
-                                            {listing.seller.is_verified && (
+                                            {listing.seller?.is_verified && (
                                                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-dark-900 flex items-center justify-center">
                                                     <Check className="w-3 h-3 text-white" />
                                                 </div>
                                             )}
                                         </div>
                                         <div>
-                                            <h4 className="text-lg font-bold text-white">{listing.seller.full_name}</h4>
-                                            <p className="text-sm text-dark-400">Student at {listing.college.name}</p>
+                                            <h4 className="text-lg font-bold text-white">{listing.seller?.full_name || 'Anonymous'}</h4>
+                                            <p className="text-sm text-dark-400">Student at {listing.college?.name || 'Campus'}</p>
                                         </div>
                                     </div>
                                     <Link href={`/profile/${listing.seller_id}`} className="text-sm font-bold text-primary-400 hover:text-primary-300">View Profile</Link>

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import { Plus, Package, Edit2, Trash2, Eye, LayoutGrid, List } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 
@@ -14,13 +15,7 @@ export default function MyListingsPage() {
     const [isLoading, setIsLoading] = useState(true)
     const supabase = createClient()
 
-    useEffect(() => {
-        if (user) {
-            fetchMyListings()
-        }
-    }, [user])
-
-    const fetchMyListings = async () => {
+    const fetchMyListings = useCallback(async () => {
         setIsLoading(true)
         const { data, error } = await supabase
             .from('listings')
@@ -30,7 +25,13 @@ export default function MyListingsPage() {
 
         if (data) setListings(data)
         setIsLoading(false)
-    }
+    }, [user, supabase])
+
+    useEffect(() => {
+        if (user) {
+            fetchMyListings()
+        }
+    }, [user, fetchMyListings])
 
     return (
         <div className="min-h-screen bg-dark-950">
@@ -41,7 +42,7 @@ export default function MyListingsPage() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                         <div>
                             <h1 className="text-3xl font-display font-bold text-white mb-2">My Listings</h1>
-                            <p className="text-dark-400">Manage items you've posted for sale or rent.</p>
+                            <p className="text-dark-400">Manage items you&apos;ve posted for sale or rent.</p>
                         </div>
                         <Link href="/create" className="btn-primary px-6 py-3">
                             <Plus className="w-5 h-5" />
@@ -61,7 +62,12 @@ export default function MyListingsPage() {
                                 <div key={item.id} className="glass-card overflow-hidden group">
                                     <div className="aspect-video bg-dark-800 relative">
                                         {item.images?.[0] && (
-                                            <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover" />
+                                            <Image
+                                                src={item.images[0]}
+                                                alt={item.title}
+                                                fill
+                                                className="object-cover"
+                                            />
                                         )}
                                         <div className="absolute top-4 right-4 flex gap-2">
                                             <button className="p-2 rounded-lg bg-dark-900/80 text-white backdrop-blur-md hover:bg-primary-500 transition-colors">
@@ -100,7 +106,7 @@ export default function MyListingsPage() {
                             </div>
                             <h2 className="text-2xl font-bold text-white mb-2">No listings yet</h2>
                             <p className="text-dark-400 mb-8 max-w-sm mx-auto">
-                                You haven't posted any items yet. Start selling to see your listings here.
+                                You haven&apos;t posted any items yet. Start selling to see your listings here.
                             </p>
                             <Link href="/create" className="btn-primary px-8 py-3 mx-auto flex items-center gap-2">
                                 <Plus className="w-5 h-5" />

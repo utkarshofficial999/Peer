@@ -98,7 +98,7 @@ export default function HelpPage() {
                     {/* Still Need Help? */}
                     <div className="mt-20 p-10 glass-card bg-gradient-to-br from-primary-500/10 to-accent-500/10 border-primary-500/20 text-center">
                         <h3 className="text-2xl font-bold text-white mb-2">Still stuck?</h3>
-                        <p className="text-dark-300 mb-8">Cant find what you're looking for? Our team is ready to help.</p>
+                        <p className="text-dark-300 mb-8">Can&apos;t find what you&apos;re looking for? Our team is ready to help.</p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <a href="/contact" className="btn-primary py-3 px-8">Contact Support</a>
                             <a href="/safety" className="btn-secondary py-3 px-8">Safety Center</a>

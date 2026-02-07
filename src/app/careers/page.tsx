@@ -24,7 +24,7 @@ export default function CareersPage() {
                             Join the <span className="gradient-text">Movement</span>
                         </h1>
                         <p className="text-xl text-dark-300 max-w-2xl mx-auto italic">
-                            "Build With Us 🚀"
+                            &quot;Build With Us 🚀&quot;
                         </p>
                     </div>
 
@@ -33,7 +33,7 @@ export default function CareersPage() {
                         <div className="relative z-10">
                             <h2 className="text-3xl font-display font-bold text-white mb-4">Why PeeRly?</h2>
                             <p className="text-dark-300 text-lg max-w-2xl mx-auto leading-relaxed">
-                                We're not just a platform; we're a group of students and creators building the future of campus commerce. We work fast, learn together, and value initiative above all else.
+                                We&apos;re not just a platform; we&apos;re a group of students and creators building the future of campus commerce. We work fast, learn together, and value initiative above all else.
                             </p>
                         </div>
                     </div>
@@ -60,7 +60,7 @@ export default function CareersPage() {
                         </div>
                         <h2 className="text-3xl font-display font-bold text-white mb-4">Send us your resume</h2>
                         <p className="text-dark-400 mb-8 max-w-md mx-auto">
-                            Don't see a role that fits? Send us your resume anyway and tell us how you can help PeeRly grow.
+                            Don&apos;t see a role that fits? Send us your resume anyway and tell us how you can help PeeRly grow.
                         </p>
                         <a
                             href="mailto:careers@peerly.in"

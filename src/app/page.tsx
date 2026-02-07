@@ -37,7 +37,7 @@ const features = [
     {
         icon: Shield,
         title: 'Verified Students Only',
-        description: 'Every user is verified with their college email. Trade with confidence knowing you\'re dealing with real students.',
+        description: "Every user is verified with their college email. Trade with confidence knowing you're dealing with real students.",
         color: 'text-emerald-400',
         bgColor: 'bg-emerald-500/10',
     },
@@ -115,6 +115,7 @@ export default function HomePage() {
             setIsLoading(false)
         }
         fetchRecent()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     return (
@@ -308,7 +309,7 @@ export default function HomePage() {
                             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">
                                 Start Trading in 3 Steps
                             </h2>
-                            <p className="text-dark-400">It's as simple as 1-2-3</p>
+                            <p className="text-dark-400">It&apos;s as simple as 1-2-3</p>
                         </div>
 
                         <div className="grid md:grid-cols-3 gap-8">
@@ -350,7 +351,7 @@ export default function HomePage() {
                                             <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
                                         ))}
                                     </div>
-                                    <p className="text-dark-200 mb-6 leading-relaxed">"{testimonial.quote}"</p>
+                                    <p className="text-dark-200 mb-6 leading-relaxed">{testimonial.quote}</p>
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm font-semibold text-white">
                                             {testimonial.avatar}
